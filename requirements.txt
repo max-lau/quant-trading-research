@@ -1,0 +1,11 @@
+pandas
+numpy
+matplotlib
+scikit-learn
+yfinance
+lightgbm
+shap
+vectorbt
+alpaca-py
+pytest
+ruff
