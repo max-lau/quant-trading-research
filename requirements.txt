@@ -3,6 +3,8 @@ numpy
 matplotlib
 scikit-learn
 yfinance
+statsmodels
+scipy
 lightgbm
 shap
 vectorbt

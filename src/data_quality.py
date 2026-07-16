@@ -59,6 +59,43 @@ def quality_report(panel: pd.DataFrame, z_thresh: float = 6.0) -> str:
     return "\n".join(lines)
 
 
+def top_movers(panel: pd.DataFrame, n: int = 3) -> str:
+    """
+    Largest single-day moves per ticker, with enough context to judge -- without
+    re-running a manual pandas query by hand each time -- whether a move is a
+    real market event or a data artifact (missing day, bad tick).
+
+    The "gap around this date?" check answers the question we asked manually
+    for HD's -22.1% day on 2020-03-16: if the days immediately before/after
+    are NOT consecutive business days, the move likely straddles a data hole
+    rather than being a genuine one-day event.
+    """
+    lines = [f"-- Top {n} single-day moves per ticker (context for judging real vs. artifact) --"]
+    for tkr, grp in panel.groupby("ticker"):
+        grp = grp.sort_values("date").reset_index(drop=True)
+        grp["log_ret"] = np.log(grp["close"] / grp["close"].shift(1))
+        biggest = grp.reindex(grp["log_ret"].abs().sort_values(ascending=False).index[:n])
+        lines.append(f"\n  {tkr}:")
+        for idx, row in biggest.iterrows():
+            prev_date = grp.loc[idx - 1, "date"] if idx > 0 else None
+            next_date = grp.loc[idx + 1, "date"] if idx < len(grp) - 1 else None
+            expected_prev = np.busday_offset(row["date"].date(), -1, roll="preceding")
+            expected_next = np.busday_offset(row["date"].date(), 1, roll="following")
+            gap_flag = ""
+            if prev_date is not None and prev_date.date() != expected_prev:
+                gap_flag = "  <-- gap before this date, verify it's a real single-day move"
+            elif next_date is not None and next_date.date() != expected_next:
+                gap_flag = "  <-- gap after this date, verify it's a real single-day move"
+            lines.append(f"    {row['date'].date()}  {row['log_ret']:+7.1%}  "
+                        f"O:{row['open']:.2f} H:{row['high']:.2f} "
+                        f"L:{row['low']:.2f} C:{row['close']:.2f}{gap_flag}")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
-    panel = pd.read_csv("data/real_ohlcv.csv", parse_dates=["date"])  # was read_parquet(simulated_ohlcv.parquet)
+    import sys
+    path = sys.argv[1] if len(sys.argv) > 1 else "data/real_ohlcv.csv"
+    panel = pd.read_csv(path, parse_dates=["date"])
     print(quality_report(panel))
+    print()
+    print(top_movers(panel))
